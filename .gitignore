@@ -1,2 +1,5 @@
 .cache
 test*
+.env
+ingest_data/
+```

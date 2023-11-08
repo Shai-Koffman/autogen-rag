@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import gradio as gr
 import os
 from pathlib import Path
@@ -8,11 +9,10 @@ from autogen.retrieve_utils import TEXT_FORMATS, get_file_from_url, is_url
 from autogen.agentchat.contrib.retrieve_assistant_agent import RetrieveAssistantAgent
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
     RetrieveUserProxyAgent,
-    PROMPT_CODE,
+    PROMPT_QA,
 )
-
+load_dotenv()
 TIMEOUT = 60
-
 
 def initialize_agents(config_list, docs_path=None):
     if isinstance(config_list, gr.State):
@@ -20,7 +20,7 @@ def initialize_agents(config_list, docs_path=None):
     else:
         _config_list = config_list
     if docs_path is None:
-        docs_path = "https://raw.githubusercontent.com/microsoft/autogen/main/README.md"
+        docs_path = os.environ.get("DOCS_PATH", os.path.join(os.getcwd(),"ingest_data/"))
 
     assistant = RetrieveAssistantAgent(
         name="assistant",
@@ -32,13 +32,13 @@ def initialize_agents(config_list, docs_path=None):
         human_input_mode="NEVER",
         max_consecutive_auto_reply=5,
         retrieve_config={
-            "task": "code",
+            "task": "QA",
             "docs_path": docs_path,
             "chunk_token_size": 2000,
             "model": _config_list[0]["model"],
             "client": chromadb.PersistentClient(path="/tmp/chromadb"),
             "embedding_model": "all-mpnet-base-v2",
-            "customized_prompt": PROMPT_CODE,
+            "customized_prompt": PROMPT_QA,
             "get_or_create": True,
             "collection_name": "autogen_rag",
         },
@@ -55,7 +55,7 @@ def initiate_chat(config_list, problem, queue, n_results=3):
         _config_list = config_list
     if len(_config_list[0].get("api_key", "")) < 2:
         queue.put(
-            ["Hi, nice to meet you! Please enter your API keys in below text boxs."]
+            ["Hi, nice to meet you, I do not have an API key, go debug!"]
         )
         return
     else:
@@ -109,11 +109,7 @@ def chatbot_reply(input_text):
 
 def get_description_text():
     return """
-    # Microsoft AutoGen: Retrieve Chat Demo
-    
-    This demo shows how to use the RetrieveUserProxyAgent and RetrieveAssistantAgent to build a chatbot.
-
-    #### [AutoGen](https://github.com/microsoft/autogen) [Discord](https://discord.gg/pAbnFJrkgZ) [Blog](https://microsoft.github.io/autogen/blog/2023/10/18/RetrieveChat) [Paper](https://arxiv.org/abs/2308.08155) [SourceCode](https://github.com/thinkall/autogen-demos)
+    # Retrieve Chat Demo
     """
 
 
@@ -124,11 +120,8 @@ with gr.Blocks() as demo:
         gr.State(
             [
                 {
-                    "api_key": "",
-                    "api_base": "",
-                    "api_type": "azure",
-                    "api_version": "2023-07-01-preview",
-                    "model": "gpt-35-turbo",
+                    "api_key": os.environ.get("OPENAI_API_KEY", ""), 
+                    "model": "gpt-3.5-turbo",
                 }
             ]
         ),
@@ -158,18 +151,16 @@ with gr.Blocks() as demo:
         def update_config(config_list):
             global assistant, ragproxyagent
             config_list = autogen.config_list_from_models(
-                model_list=[os.environ.get("MODEL", "gpt-35-turbo")],
+                model_list=[os.environ.get("MODEL", "gpt-3.5-turbo")],
             )
             if not config_list:
                 config_list = [
                     {
-                        "api_key": "",
-                        "api_base": "",
-                        "api_type": "azure",
-                        "api_version": "2023-07-01-preview",
-                        "model": "gpt-35-turbo",
+                        "api_key": os.environ.get("OPENAI_API_KEY", ""),
+                       "model": "gpt-3.5-turbo",
                     }
                 ]
+            config_list[0]["api_key"] = os.environ.get("OPENAI_API_KEY", "")
             llm_config = (
                 {
                     "request_timeout": TIMEOUT,
@@ -181,86 +172,60 @@ with gr.Blocks() as demo:
             ragproxyagent._model = config_list[0]["model"]
             return config_list
 
-        def set_params(model, oai_key, aoai_key, aoai_base):
+        def set_params(model):
             os.environ["MODEL"] = model
-            os.environ["OPENAI_API_KEY"] = oai_key
-            os.environ["AZURE_OPENAI_API_KEY"] = aoai_key
-            os.environ["AZURE_OPENAI_API_BASE"] = aoai_base
-            return model, oai_key, aoai_key, aoai_base
+            return model
 
         txt_model = gr.Dropdown(
             label="Model",
             choices=[
+                
+                "gpt-4-1106-preview",
                 "gpt-4",
-                "gpt-35-turbo",
+                "gpt-3.5-turbo-16k-0613",
+                "gpt-3.5-turbo-16k",
                 "gpt-3.5-turbo",
             ],
             allow_custom_value=True,
-            value="gpt-35-turbo",
+            value="gpt-3.5-turbo",
             container=True,
         )
-        txt_oai_key = gr.Textbox(
-            label="OpenAI API Key",
-            placeholder="Enter key and press enter",
-            max_lines=1,
-            show_label=True,
-            value=os.environ.get("OPENAI_API_KEY", ""),
-            container=True,
-            type="password",
-        )
-        txt_aoai_key = gr.Textbox(
-            label="Azure OpenAI API Key",
-            placeholder="Enter key and press enter",
-            max_lines=1,
-            show_label=True,
-            value=os.environ.get("AZURE_OPENAI_API_KEY", ""),
-            container=True,
-            type="password",
-        )
-        txt_aoai_base_url = gr.Textbox(
-            label="Azure OpenAI API Base",
-            placeholder="Enter base url and press enter",
-            max_lines=1,
-            show_label=True,
-            value=os.environ.get("AZURE_OPENAI_API_BASE", ""),
-            container=True,
-            type="password",
-        )
+ 
 
     clear = gr.ClearButton([txt_input, chatbot])
 
-    with gr.Row():
+    # with gr.Row():
 
-        def upload_file(file):
-            return update_context_url(file.name)
+    #     def upload_file(file):
+    #         return update_context_url(file.name)
 
-        upload_button = gr.UploadButton(
-            "Click to upload a context file or enter a url in the right textbox",
-            file_types=[f".{i}" for i in TEXT_FORMATS],
-            file_count="single",
-        )
+    #     upload_button = gr.UploadButton(
+    #         "Click to upload a context file or enter a url in the right textbox",
+    #         file_types=[f".{i}" for i in TEXT_FORMATS],
+    #         file_count="single",
+    #     )
 
-        txt_context_url = gr.Textbox(
-            label="Enter the url to your context file and chat on the context",
-            info=f"File must be in the format of [{', '.join(TEXT_FORMATS)}]",
-            max_lines=1,
-            show_label=True,
-            value="https://raw.githubusercontent.com/microsoft/autogen/main/README.md",
-            container=True,
-        )
+    #     txt_context_url = gr.Textbox(
+    #         label="Enter the url to your context file and chat on the context",
+    #         info=f"File must be in the format of [{', '.join(TEXT_FORMATS)}]",
+    #         max_lines=1,
+    #         show_label=True,
+    #         value="",
+    #         container=True,
+    #     )
 
     txt_prompt = gr.Textbox(
         label="Enter your prompt for Retrieve Agent and press enter to replace the default prompt",
         max_lines=40,
         show_label=True,
-        value=PROMPT_CODE,
+        value=PROMPT_QA,
         container=True,
         show_copy_button=True,
     )
-
-    def respond(message, chat_history, model, oai_key, aoai_key, aoai_base):
+    """ This method is called when the user presses the submit button. """
+    def respond(message, chat_history, model):
         global config_list
-        set_params(model, oai_key, aoai_key, aoai_base)
+        set_params(model)
         config_list = update_config(config_list)
         messages = chatbot_reply(message)
         _msg = (
@@ -277,43 +242,43 @@ with gr.Blocks() as demo:
         ragproxyagent.customized_prompt = prompt
         return prompt
 
-    def update_context_url(context_url):
-        global assistant, ragproxyagent
+    # def update_context_url(context_url):
+    #     global assistant, ragproxyagent
 
-        file_extension = Path(context_url).suffix
-        print("file_extension: ", file_extension)
-        if file_extension.lower() not in [f".{i}" for i in TEXT_FORMATS]:
-            return f"File must be in the format of {TEXT_FORMATS}"
+    #     file_extension = Path(context_url).suffix
+    #     print("file_extension: ", file_extension)
+    #     if file_extension.lower() not in [f".{i}" for i in TEXT_FORMATS]:
+    #         return f"File must be in the format of {TEXT_FORMATS}"
 
-        if is_url(context_url):
-            try:
-                file_path = get_file_from_url(
-                    context_url,
-                    save_path=os.path.join("/tmp", os.path.basename(context_url)),
-                )
-            except Exception as e:
-                return str(e)
-        else:
-            file_path = context_url
-            context_url = os.path.basename(context_url)
+    #     if is_url(context_url):
+    #         try:
+    #             file_path = get_file_from_url(
+    #                 context_url,
+    #                 save_path=os.path.join("/tmp", os.path.basename(context_url)),
+    #             )
+    #         except Exception as e:
+    #             return str(e)
+    #     else:
+    #         file_path = context_url
+    #         context_url = os.path.basename(context_url)
 
-        try:
-            chromadb.PersistentClient(path="/tmp/chromadb").delete_collection(
-                name="autogen_rag"
-            )
-        except:
-            pass
-        assistant, ragproxyagent = initialize_agents(config_list, docs_path=file_path)
-        return context_url
+    #     try:
+    #         chromadb.PersistentClient(path="/tmp/chromadb").delete_collection(
+    #             name="autogen_rag"
+    #         )
+    #     except:
+    #         pass
+    #     assistant, ragproxyagent = initialize_agents(config_list, docs_path=file_path)
+    #     return context_url
 
     txt_input.submit(
         respond,
-        [txt_input, chatbot, txt_model, txt_oai_key, txt_aoai_key, txt_aoai_base_url],
+        [txt_input, chatbot, txt_model],
         [txt_input, chatbot],
     )
     txt_prompt.submit(update_prompt, [txt_prompt], [txt_prompt])
-    txt_context_url.submit(update_context_url, [txt_context_url], [txt_context_url])
-    upload_button.upload(upload_file, upload_button, [txt_context_url])
+    # txt_context_url.submit(update_context_url, [txt_context_url], [txt_context_url])
+    # upload_button.upload(upload_file, upload_button, [txt_context_url])
 
 
 if __name__ == "__main__":
