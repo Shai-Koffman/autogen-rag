@@ -14,6 +14,7 @@ from autogen.agentchat.contrib.retrieve_user_proxy_agent import (
 load_dotenv()
 TIMEOUT = 60
 
+
 def initialize_agents(config_list, docs_path=None):
     if isinstance(config_list, gr.State):
         _config_list = config_list.value
@@ -194,26 +195,6 @@ with gr.Blocks() as demo:
 
     clear = gr.ClearButton([txt_input, chatbot])
 
-    # with gr.Row():
-
-    #     def upload_file(file):
-    #         return update_context_url(file.name)
-
-    #     upload_button = gr.UploadButton(
-    #         "Click to upload a context file or enter a url in the right textbox",
-    #         file_types=[f".{i}" for i in TEXT_FORMATS],
-    #         file_count="single",
-    #     )
-
-    #     txt_context_url = gr.Textbox(
-    #         label="Enter the url to your context file and chat on the context",
-    #         info=f"File must be in the format of [{', '.join(TEXT_FORMATS)}]",
-    #         max_lines=1,
-    #         show_label=True,
-    #         value="",
-    #         container=True,
-    #     )
-
     txt_prompt = gr.Textbox(
         label="Enter your prompt for Retrieve Agent and press enter to replace the default prompt",
         max_lines=40,
@@ -242,34 +223,6 @@ with gr.Blocks() as demo:
         ragproxyagent.customized_prompt = prompt
         return prompt
 
-    # def update_context_url(context_url):
-    #     global assistant, ragproxyagent
-
-    #     file_extension = Path(context_url).suffix
-    #     print("file_extension: ", file_extension)
-    #     if file_extension.lower() not in [f".{i}" for i in TEXT_FORMATS]:
-    #         return f"File must be in the format of {TEXT_FORMATS}"
-
-    #     if is_url(context_url):
-    #         try:
-    #             file_path = get_file_from_url(
-    #                 context_url,
-    #                 save_path=os.path.join("/tmp", os.path.basename(context_url)),
-    #             )
-    #         except Exception as e:
-    #             return str(e)
-    #     else:
-    #         file_path = context_url
-    #         context_url = os.path.basename(context_url)
-
-    #     try:
-    #         chromadb.PersistentClient(path="/tmp/chromadb").delete_collection(
-    #             name="autogen_rag"
-    #         )
-    #     except:
-    #         pass
-    #     assistant, ragproxyagent = initialize_agents(config_list, docs_path=file_path)
-    #     return context_url
 
     txt_input.submit(
         respond,
@@ -277,8 +230,6 @@ with gr.Blocks() as demo:
         [txt_input, chatbot],
     )
     txt_prompt.submit(update_prompt, [txt_prompt], [txt_prompt])
-    # txt_context_url.submit(update_context_url, [txt_context_url], [txt_context_url])
-    # upload_button.upload(upload_file, upload_button, [txt_context_url])
 
 
 if __name__ == "__main__":
